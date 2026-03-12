@@ -139,6 +139,8 @@ usr2_cmd = 'kill -USR2 $(cat /tmp/claude-breakout.pid 2>/dev/null) 2>/dev/null; 
 new_hooks = {
     "UserPromptSubmit": {"hooks": [{"type": "command", "command": usr1_cmd, "async": True}]},
     "Stop": {"hooks": [{"type": "command", "command": usr2_cmd, "async": True}]},
+    "PermissionRequest": {"hooks": [{"type": "command", "command": usr2_cmd, "async": True}]},
+    "Notification": {"hooks": [{"type": "command", "command": usr2_cmd, "async": True}]},
 }
 
 for event_name, hook_entry in new_hooks.items():

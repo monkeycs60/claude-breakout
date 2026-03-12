@@ -168,6 +168,12 @@ new_hooks = {
     "Stop": {
         "hooks": [{"type": "command", "command": usr2_cmd, "async": True}]
     },
+    "PermissionRequest": {
+        "hooks": [{"type": "command", "command": usr2_cmd, "async": True}]
+    },
+    "Notification": {
+        "hooks": [{"type": "command", "command": usr2_cmd, "async": True}]
+    },
 }
 
 # Merge: append to existing hook arrays without duplicating
