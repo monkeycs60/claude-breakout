@@ -11,65 +11,59 @@ echo -e "${YELLOW}║     claude-breakout installer    ║${NC}"
 echo -e "${YELLOW}╚══════════════════════════════════╝${NC}"
 echo ""
 
-# --- Check dependencies ---
+# --- Check/install Rust ---
 if ! command -v cargo &> /dev/null; then
-    echo -e "${RED}✗ Rust/Cargo not found${NC}"
-    echo "  Install from https://rustup.rs"
-    exit 1
-fi
-echo -e "${GREEN}✓${NC} Rust/Cargo found"
-
-if ! command -v tmux &> /dev/null; then
-    echo -e "${YELLOW}⚠ tmux not found (needed for side-by-side mode)${NC}"
-    echo ""
-    # Detect package manager and install
-    if command -v apt-get &> /dev/null; then
-        echo "  Installing tmux via apt..."
-        sudo apt-get install -y tmux && echo -e "${GREEN}✓${NC} tmux installed"
-    elif command -v brew &> /dev/null; then
-        echo "  Installing tmux via Homebrew..."
-        brew install tmux && echo -e "${GREEN}✓${NC} tmux installed"
-    elif command -v dnf &> /dev/null; then
-        echo "  Installing tmux via dnf..."
-        sudo dnf install -y tmux && echo -e "${GREEN}✓${NC} tmux installed"
-    elif command -v pacman &> /dev/null; then
-        echo "  Installing tmux via pacman..."
-        sudo pacman -S --noconfirm tmux && echo -e "${GREEN}✓${NC} tmux installed"
-    else
-        echo -e "${YELLOW}  Could not auto-install tmux. Install it manually:${NC}"
-        echo "  https://github.com/tmux/tmux/wiki/Installing"
+    echo -e "${YELLOW}⚠ Rust not found. Installing via rustup...${NC}"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source "$HOME/.cargo/env"
+    if ! command -v cargo &> /dev/null; then
+        echo -e "${RED}✗ Rust installation failed${NC}"
+        exit 1
     fi
+    echo -e "${GREEN}✓${NC} Rust installed"
+else
+    echo -e "${GREEN}✓${NC} Rust found"
+fi
+
+# --- Check/install tmux ---
+if ! command -v tmux &> /dev/null; then
+    echo -e "${YELLOW}⚠ tmux not found. Installing...${NC}"
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get install -y tmux
+    elif command -v brew &> /dev/null; then
+        brew install tmux
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y tmux
+    elif command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm tmux
+    else
+        echo -e "${YELLOW}  Could not auto-install tmux: https://github.com/tmux/tmux/wiki/Installing${NC}"
+    fi
+    command -v tmux &> /dev/null && echo -e "${GREEN}✓${NC} tmux installed"
 else
     echo -e "${GREEN}✓${NC} tmux found"
 fi
 
-# --- Build ---
+# --- Clone, build, install ---
+TMPDIR=$(mktemp -d)
+trap "rm -rf $TMPDIR" EXIT
+
 echo ""
-echo "Building claude-breakout (release)..."
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
-cargo build --release 2>&1
+echo "Downloading claude-breakout..."
+git clone --depth 1 https://github.com/monkeycs60/claude-breakout.git "$TMPDIR/claude-breakout" 2>&1 | tail -1
+cd "$TMPDIR/claude-breakout"
 
-BINARY="$SCRIPT_DIR/target/release/claude-breakout"
-if [ ! -f "$BINARY" ]; then
-    echo -e "${RED}✗ Build failed${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓${NC} Build successful"
+echo "Building (this may take a minute on first run)..."
+cargo build --release 2>&1 | tail -1
 
-# --- Install binary ---
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
-cp "$BINARY" "$INSTALL_DIR/claude-breakout"
-chmod +x "$INSTALL_DIR/claude-breakout"
-echo -e "${GREEN}✓${NC} Binary installed to $INSTALL_DIR/claude-breakout"
+cp target/release/claude-breakout "$INSTALL_DIR/"
+echo -e "${GREEN}✓${NC} Binary installed"
 
 # --- Create claudebreak launcher ---
 cat > "$INSTALL_DIR/claudebreak" << 'LAUNCHER'
 #!/bin/bash
-# claudebreak — Launch Claude Code with breakout side pane
-# Usage: claudebreak [--no-autofocus] [--left] [--bottom] [--size PERCENT]
-
 AUTOFOCUS=true
 POSITION="right"
 SIZE=30
@@ -98,23 +92,17 @@ if ! command -v tmux &> /dev/null; then
     exit 1
 fi
 
-# Cleanup
 tmux kill-session -t claudebreak 2>/dev/null || true
 rm -f /tmp/claude-breakout-no-autofocus /tmp/claude-breakout-game-pane /tmp/claude-breakout-claude-pane
 
-# Autofocus config
 if [ "$AUTOFOCUS" = "false" ]; then
     touch /tmp/claude-breakout-no-autofocus
 fi
 
-# Create session with Claude Code
 tmux new-session -d -s claudebreak "claude"
-
-# Save Claude pane ID
 CLAUDE_PANE=$(tmux display-message -t claudebreak -p '#{pane_id}')
 echo "$CLAUDE_PANE" > /tmp/claude-breakout-claude-pane
 
-# Add game pane and capture its ID
 case $POSITION in
     right)  GAME_PANE=$(tmux split-window -h -p "$SIZE" -t claudebreak -P -F '#{pane_id}' "claude-breakout") ;;
     left)   GAME_PANE=$(tmux split-window -hb -p "$SIZE" -t claudebreak -P -F '#{pane_id}' "claude-breakout") ;;
@@ -122,30 +110,19 @@ case $POSITION in
 esac
 echo "$GAME_PANE" > /tmp/claude-breakout-game-pane
 
-# Focus on Claude Code pane
 tmux select-pane -t "$CLAUDE_PANE"
-
 tmux attach-session -t claudebreak
 LAUNCHER
 chmod +x "$INSTALL_DIR/claudebreak"
 echo -e "${GREEN}✓${NC} claudebreak launcher installed"
 
 # --- Configure Claude Code hooks ---
-echo ""
-echo "Configuring Claude Code hooks..."
-
-SETTINGS_DIR="$HOME/.claude"
-SETTINGS_FILE="$SETTINGS_DIR/settings.json"
-mkdir -p "$SETTINGS_DIR"
-
-# Python script to safely merge hooks into existing settings
 python3 << 'PYEOF'
-import json
-import os
+import json, os
 
 settings_file = os.path.expanduser("~/.claude/settings.json")
+os.makedirs(os.path.dirname(settings_file), exist_ok=True)
 
-# Load existing settings or start fresh
 settings = {}
 if os.path.exists(settings_file):
     try:
@@ -156,66 +133,50 @@ if os.path.exists(settings_file):
 
 hooks = settings.setdefault("hooks", {})
 
-# Signal + tmux autofocus commands
 usr1_cmd = 'kill -USR1 $(cat /tmp/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-game-pane 2>/dev/null) 2>/dev/null; true'
 usr2_cmd = 'kill -USR2 $(cat /tmp/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-claude-pane 2>/dev/null) 2>/dev/null; true'
 
-# Hook entries to add
 new_hooks = {
-    "UserPromptSubmit": {
-        "hooks": [{"type": "command", "command": usr1_cmd, "async": True}]
-    },
-    "Stop": {
-        "hooks": [{"type": "command", "command": usr2_cmd, "async": True}]
-    },
+    "UserPromptSubmit": {"hooks": [{"type": "command", "command": usr1_cmd, "async": True}]},
+    "Stop": {"hooks": [{"type": "command", "command": usr2_cmd, "async": True}]},
 }
 
-# Merge: append to existing hook arrays without duplicating
 for event_name, hook_entry in new_hooks.items():
     event_hooks = hooks.setdefault(event_name, [])
-
-    # Check if our hook is already there
-    already_exists = any(
-        any("claude-breakout" in h.get("command", "") for h in entry.get("hooks", []))
-        for entry in event_hooks
+    already = any(
+        any("claude-breakout" in h.get("command", "") for h in e.get("hooks", []))
+        for e in event_hooks
     )
-
-    if not already_exists:
+    if not already:
         event_hooks.append(hook_entry)
 
 with open(settings_file, "w") as f:
     json.dump(settings, f, indent=2)
-
-print("Hooks configured successfully")
 PYEOF
-
 echo -e "${GREEN}✓${NC} Claude Code hooks configured"
 
 # --- Check PATH ---
 echo ""
-if echo "$PATH" | grep -q "$INSTALL_DIR"; then
-    echo -e "${GREEN}✓${NC} $INSTALL_DIR is in your PATH"
+if echo "$PATH" | grep -q "$HOME/.local/bin"; then
+    echo -e "${GREEN}✓${NC} ~/.local/bin is in your PATH"
 else
-    echo -e "${YELLOW}⚠${NC} Add $INSTALL_DIR to your PATH:"
-    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-    echo "  source ~/.bashrc"
+    # Add to PATH permanently
+    SHELL_RC="$HOME/.bashrc"
+    [ -n "$ZSH_VERSION" ] && SHELL_RC="$HOME/.zshrc"
+    [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
+    export PATH="$HOME/.local/bin:$PATH"
+    echo -e "${GREEN}✓${NC} Added ~/.local/bin to PATH (restart terminal or: source $SHELL_RC)"
 fi
 
 # --- Done ---
 echo ""
 echo -e "${GREEN}══════════════════════════════════════${NC}"
-echo -e "${GREEN} Installation complete!${NC}"
+echo -e "${GREEN} claude-breakout installed!${NC}"
 echo -e "${GREEN}══════════════════════════════════════${NC}"
 echo ""
-echo "Usage:"
-echo "  claudebreak          Launch Claude Code + Breakout side by side"
-echo "  claude-breakout      Launch just the game standalone"
+echo "  claudebreak        Launch Claude Code + Breakout"
+echo "  claude-breakout    Just the game"
 echo ""
-echo "Controls:"
-echo "  ← →     Move paddle"
-echo "  SPACE    Pause/Resume"
-echo "  ENTER    Start game / Restart after game over"
-echo "  Q        Quit"
+echo "  ← →  Move  |  Space  Pause  |  Enter  Start  |  Q  Quit"
 echo ""
-echo "The game auto-pauses when Claude finishes and"
-echo "auto-resumes when you submit a new prompt!"

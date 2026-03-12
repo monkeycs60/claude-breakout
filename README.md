@@ -25,37 +25,55 @@ Uses Claude Code's [hook system](https://docs.anthropic.com/en/docs/claude-code/
 - **`UserPromptSubmit`** hook → sends `SIGUSR1` → game **unpauses**
 - **`Stop`** hook → sends `SIGUSR2` → game **pauses**
 
-The game runs in a separate tmux pane. Zero interference with your workflow.
+Zero interference with your workflow.
 
 ## Install
 
+One command. Installs everything (Rust, tmux, binary, hooks):
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-breakout.git
-cd claude-breakout
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/monkeycs60/claude-breakout/main/install-remote.sh | bash
 ```
 
-The install script:
-1. Builds the binary (requires [Rust](https://rustup.rs))
-2. Installs to `~/.local/bin/`
-3. Configures Claude Code hooks automatically
-4. Creates the `claudebreak` launcher
+That's it. The script handles:
+1. Installing Rust if missing (via [rustup](https://rustup.rs))
+2. Installing tmux if missing (via your package manager)
+3. Building the game binary
+4. Configuring Claude Code hooks
+5. Creating the `claudebreak` launcher
+6. Adding `~/.local/bin` to your PATH
 
 ## Usage
 
+### With tmux (recommended)
+
 ```bash
-# Launch Claude Code + Breakout side by side
-claudebreak
+claudebreak                      # Side by side: Claude Code + Breakout
 
 # Options
-claudebreak --no-autofocus    # Don't auto-switch focus to game
-claudebreak --bottom          # Game pane on the bottom
-claudebreak --left            # Game pane on the left
-claudebreak --size 40         # Game pane takes 40% of terminal
-
-# Or just the game standalone
-claude-breakout
+claudebreak --no-autofocus       # Don't auto-switch focus between panes
+claudebreak --bottom             # Game pane on the bottom
+claudebreak --left               # Game pane on the left
+claudebreak --size 40            # Game pane takes 40% of terminal
 ```
+
+Focus auto-switches to the game when you submit a prompt, and back to Claude Code when it finishes.
+
+### Without tmux
+
+Just open two terminals:
+1. Run `claude` (Claude Code) in one
+2. Run `claude-breakout` in the other
+
+The hooks still work — the game will auto-pause/resume via Unix signals regardless of your terminal setup. You just won't get auto-focus switching.
+
+### Standalone (no Claude Code)
+
+```bash
+claude-breakout                   # Just play the game!
+```
+
+Press `Enter` to start, `Space` to pause. Works without any hooks.
 
 ## Controls
 
@@ -69,25 +87,28 @@ claude-breakout
 ## Features
 
 - **Auto pause/resume** via Claude Code hooks
+- **Auto-focus** — tmux switches between game and Claude panes automatically
+- **Progressive difficulty** — ball starts slow, accelerates as you destroy bricks
 - **Powerups** (rare ~5% drop rate):
   - `W` Wide paddle (10s)
   - `M` Multi-ball (3 balls!)
   - `S` Slow-mo (8s)
-- **Progressive difficulty** — ball speeds up each level
+- **Grace period** — ball slows down for 1s after resuming so you don't get blindsided
 - **Responsive** — adapts to terminal/pane size
-- **Lightweight** — single binary, ~30 FPS, minimal CPU
+- **Lightweight** — single 611KB binary, ~30 FPS, minimal CPU
 
 ## Requirements
 
 - [Rust](https://rustup.rs) (to build)
-- [tmux](https://github.com/tmux/tmux) (for side-by-side mode)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for auto pause/resume)
+- [tmux](https://github.com/tmux/tmux) (optional — for side-by-side mode + auto-focus)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (optional — for auto pause/resume)
 
 ## Uninstall
 
 ```bash
 rm ~/.local/bin/claude-breakout ~/.local/bin/claudebreak
-# Remove hooks from ~/.claude/settings.json (the "UserPromptSubmit" and "Stop" entries containing "claude-breakout")
+# Remove hooks from ~/.claude/settings.json
+# (delete the "UserPromptSubmit" and "Stop" entries containing "claude-breakout")
 ```
 
 ## License

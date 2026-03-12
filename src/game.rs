@@ -6,7 +6,9 @@ const BRICK_ROWS: usize = 10;
 const BRICK_START_Y: f64 = 1.0;
 const PADDLE_BASE_WIDTH: f64 = 9.0;
 const PADDLE_SPEED: f64 = 3.0;
-const BALL_SPEED: f64 = 0.85;
+const BALL_SPEED_MIN: f64 = 0.6;
+const BALL_SPEED_MAX: f64 = 2.0;
+const GRACE_SPEED: f64 = 0.4;
 const POWERUP_CHANCE: f64 = 0.05;
 const POWERUP_FALL_SPEED: f64 = 0.35;
 const INITIAL_LIVES: u8 = 3;
@@ -70,6 +72,8 @@ pub struct GameState {
     pub width: f64,
     pub height: f64,
     pub grace_ticks: u32,
+    pub total_bricks: usize,
+    pub bricks_destroyed: usize,
 }
 
 impl GameState {
@@ -93,6 +97,8 @@ impl GameState {
             width: w,
             height: h,
             grace_ticks: 0,
+            total_bricks: 0,
+            bricks_destroyed: 0,
         };
         game.init_level();
         game.spawn_ball();
@@ -131,10 +137,25 @@ impl GameState {
                     .collect()
             })
             .collect();
+        self.total_bricks = BRICK_ROWS * self.brick_cols;
+        self.bricks_destroyed = 0;
+    }
+
+    pub fn current_speed(&self) -> f64 {
+        let level_bonus = (self.level as f64 - 1.0) * 0.08;
+        let progress = if self.total_bricks > 0 {
+            self.bricks_destroyed as f64 / self.total_bricks as f64
+        } else {
+            0.0
+        };
+        // Quadratic curve: slow ramp early, fast ramp late
+        let curve = progress * progress;
+        let base = BALL_SPEED_MIN + curve * (BALL_SPEED_MAX - BALL_SPEED_MIN);
+        base + level_bonus
     }
 
     fn spawn_ball(&mut self) {
-        let speed = BALL_SPEED + (self.level as f64 - 1.0) * 0.05;
+        let speed = self.current_speed();
         self.balls.push(Ball {
             x: self.width / 2.0,
             y: self.height - 5.0,
@@ -160,7 +181,7 @@ impl GameState {
     }
 
     fn start_grace_period(&mut self) {
-        self.grace_ticks = 23; // ~0.75s at 30fps
+        self.grace_ticks = 30; // 1s at 30fps
     }
 
     pub fn toggle_pause(&mut self) {
@@ -220,15 +241,13 @@ impl GameState {
         self.update_effects();
         self.grace_ticks = self.grace_ticks.saturating_sub(1);
 
-        let mut speed_mult = if self.effects.iter().any(|e| e.kind == PowerupKind::SlowMo) {
+        let speed_mult = if self.grace_ticks > 0 {
+            GRACE_SPEED / self.current_speed().max(0.1)
+        } else if self.effects.iter().any(|e| e.kind == PowerupKind::SlowMo) {
             0.5
         } else {
             1.0
         };
-
-        if self.grace_ticks > 0 {
-            speed_mult *= 0.5;
-        }
 
         let has_wide = self.effects.iter().any(|e| e.kind == PowerupKind::WidePaddle);
         self.paddle.width = if has_wide {
@@ -262,6 +281,7 @@ impl GameState {
 
     fn update_balls(&mut self, speed_mult: f64) {
         let paddle_y = self.height - 3.0;
+        let current_speed = self.current_speed();
         let mut lost = Vec::new();
 
         for (i, ball) in self.balls.iter_mut().enumerate() {
@@ -290,7 +310,7 @@ impl GameState {
                 let right = self.paddle.x + half;
                 if ball.x >= left && ball.x <= right {
                     let hit_pos = ((ball.x - self.paddle.x) / half).clamp(-1.0, 1.0);
-                    let speed = BALL_SPEED + (self.level as f64 - 1.0) * 0.05;
+                    let speed = current_speed;
                     ball.vx = hit_pos * speed * 1.3;
                     ball.vy = -(speed * 0.5 + (1.0 - hit_pos.abs()) * speed * 0.2);
                     ball.y = paddle_y - 0.1;
@@ -359,6 +379,7 @@ impl GameState {
                             }
 
                             self.score += points;
+                            self.bricks_destroyed += 1;
 
                             // Maybe spawn powerup
                             if rng.gen::<f64>() < POWERUP_CHANCE {
