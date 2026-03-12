@@ -38,6 +38,7 @@ pub struct Paddle {
 pub struct Brick {
     pub color_idx: usize,
     pub points: u32,
+    pub hits: u8,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -125,20 +126,64 @@ impl GameState {
         if self.brick_cols == 0 {
             self.brick_cols = 1;
         }
+
+        let pattern = self.level_pattern();
+        let mut count = 0;
+
         self.bricks = (0..BRICK_ROWS)
             .map(|row| {
                 (0..self.brick_cols)
-                    .map(|_| {
-                        Some(Brick {
-                            color_idx: row,
-                            points: ((BRICK_ROWS - row) * 10) as u32,
-                        })
+                    .map(|col| {
+                        if pattern(row, col, self.brick_cols) {
+                            count += 1;
+                            Some(Brick {
+                                color_idx: row,
+                                points: ((BRICK_ROWS - row) * 10) as u32,
+                                hits: self.brick_hits(row),
+                            })
+                        } else {
+                            None
+                        }
                     })
                     .collect()
             })
             .collect();
-        self.total_bricks = BRICK_ROWS * self.brick_cols;
+        self.total_bricks = count;
         self.bricks_destroyed = 0;
+    }
+
+    fn brick_hits(&self, row: usize) -> u8 {
+        if self.level <= 3 {
+            1
+        } else if self.level <= 6 {
+            // Top 3 rows get 2 hits
+            if row < 3 { 2 } else { 1 }
+        } else {
+            // Top 3 rows get 3 hits, next 3 get 2 hits
+            if row < 3 { 3 } else if row < 6 { 2 } else { 1 }
+        }
+    }
+
+    fn level_pattern(&self) -> fn(usize, usize, usize) -> bool {
+        match (self.level - 1) % 6 {
+            0 => |_, _, _| true,                                          // Full
+            1 => |row, col, cols| {                                       // Pyramid
+                let margin = row / 2;
+                col >= margin && col < cols - margin
+            },
+            2 => |row, col, _| (row + col) % 2 == 0,                     // Checkerboard
+            3 => |row, col, cols| {                                       // Diamond
+                let mid = cols / 2;
+                let half_w = if row <= BRICK_ROWS / 2 { row + 1 } else { BRICK_ROWS - row };
+                col >= mid.saturating_sub(half_w) && col < mid + half_w
+            },
+            4 => |row, _, _| row % 3 != 1,                               // Stripes (gaps)
+            5 => |row, col, cols| {                                       // Inverted pyramid
+                let margin = (BRICK_ROWS - 1 - row) / 2;
+                col >= margin && col < cols - margin
+            },
+            _ => |_, _, _| true,
+        }
     }
 
     pub fn current_speed(&self) -> f64 {
@@ -366,7 +411,6 @@ impl GameState {
                             && ball.y >= by - 0.3
                             && ball.y <= by + 1.3
                         {
-                            let points = brick.points;
                             let center_x = bx + BRICK_WIDTH as f64 / 2.0;
                             let center_y = by + 0.5;
                             let dx = (ball.x - center_x) / (BRICK_WIDTH as f64 / 2.0);
@@ -378,24 +422,28 @@ impl GameState {
                                 ball.vy = -ball.vy;
                             }
 
-                            self.score += points;
-                            self.bricks_destroyed += 1;
+                            brick.hits -= 1;
+                            if brick.hits == 0 {
+                                let points = brick.points;
+                                self.score += points;
+                                self.bricks_destroyed += 1;
 
-                            // Maybe spawn powerup
-                            if rng.gen::<f64>() < POWERUP_CHANCE {
-                                let kind = match rng.gen_range(0..3) {
-                                    0 => PowerupKind::WidePaddle,
-                                    1 => PowerupKind::MultiBall,
-                                    _ => PowerupKind::SlowMo,
-                                };
-                                new_powerups.push(FallingPowerup {
-                                    x: bx + BRICK_WIDTH as f64 / 2.0,
-                                    y: by + 1.0,
-                                    kind,
-                                });
+                                // Maybe spawn powerup
+                                if rng.gen::<f64>() < POWERUP_CHANCE {
+                                    let kind = match rng.gen_range(0..3) {
+                                        0 => PowerupKind::WidePaddle,
+                                        1 => PowerupKind::MultiBall,
+                                        _ => PowerupKind::SlowMo,
+                                    };
+                                    new_powerups.push(FallingPowerup {
+                                        x: bx + BRICK_WIDTH as f64 / 2.0,
+                                        y: by + 1.0,
+                                        kind,
+                                    });
+                                }
+
+                                *brick_slot = None;
                             }
-
-                            *brick_slot = None;
                             hit = true;
                             break;
                         }

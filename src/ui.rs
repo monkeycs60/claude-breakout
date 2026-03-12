@@ -125,7 +125,12 @@ fn render_bricks(buf: &mut Buffer, game: &GameState, area: Rect) {
             if let Some(b) = brick {
                 let x_start = offset_x + col_idx as f64 * (BRICK_WIDTH + BRICK_GAP) as f64;
                 let color = BRICK_COLORS[b.color_idx % BRICK_COLORS.len()];
-                let brick_str: String = "█".repeat(BRICK_WIDTH);
+                let ch = match b.hits {
+                    3 => "▓",
+                    2 => "▒",
+                    _ => "█",
+                };
+                let brick_str: String = ch.repeat(BRICK_WIDTH);
 
                 let sx = area.x + x_start as u16;
                 if sx + BRICK_WIDTH as u16 <= area.x + area.width && y < area.y + area.height {

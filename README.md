@@ -4,8 +4,7 @@ A terminal Breakout game that you play **while waiting for Claude Code** to fini
 
 The game auto-pauses when Claude responds and auto-resumes when you submit a new prompt. No more staring at a spinner.
 
-<!-- TODO: Add GIF here -->
-<!-- ![demo](./demo.gif) -->
+![demo](./demo.gif)
 
 ## How it works
 
