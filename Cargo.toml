@@ -1,0 +1,16 @@
+[package]
+name = "claude-breakout"
+version = "0.1.0"
+edition = "2021"
+description = "A terminal breakout game to play while waiting for Claude Code"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.28"
+crossterm = "0.28"
+rand = "0.8"
+signal-hook = "0.3"
+
+[profile.release]
+strip = true
+lto = true
