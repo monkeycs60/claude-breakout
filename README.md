@@ -32,7 +32,7 @@ Zero interference with your workflow.
 One command. Installs everything (Rust, tmux, binary, hooks):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/monkeycs60/claude-breakout/main/install-remote.sh | bash
+curl -fsSL https://raw.githubusercontent.com/monkeycs60/claude-breakout/master/install-remote.sh | bash
 ```
 
 That's it. The script handles:
