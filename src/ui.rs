@@ -29,8 +29,8 @@ const BRICK_COLORS: [Color; 10] = [
 pub fn render(frame: &mut Frame, game: &GameState) {
     let area = frame.area();
 
-    if area.width < 30 || area.height < 15 {
-        let msg = Paragraph::new("Resize terminal\nMin: 30x15")
+    if area.width < 20 || area.height < 10 {
+        let msg = Paragraph::new("Too small!\n20x10 min")
             .alignment(Alignment::Center);
         frame.render_widget(msg, area);
         return;
