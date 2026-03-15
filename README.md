@@ -49,11 +49,16 @@ That's it. The script handles:
 ```bash
 claudebreak                      # Side by side: Claude Code + Breakout
 
-# Options
+# Layout options
 claudebreak --no-autofocus       # Don't auto-switch focus between panes
 claudebreak --bottom             # Game pane on the bottom
 claudebreak --left               # Game pane on the left
 claudebreak --size 40            # Game pane takes 40% of terminal
+
+# Pass flags to Claude Code (everything after --)
+claudebreak -- --dangerously-skip-permissions
+claudebreak -- -p "fix the tests"
+claudebreak --left -- --model sonnet
 ```
 
 Focus auto-switches to the game when you submit a prompt, and back to Claude Code when it finishes.

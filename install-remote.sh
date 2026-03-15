@@ -67,6 +67,7 @@ cat > "$INSTALL_DIR/claudebreak" << 'LAUNCHER'
 AUTOFOCUS=true
 POSITION="right"
 SIZE=30
+CLAUDE_ARGS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -75,14 +76,20 @@ while [[ $# -gt 0 ]]; do
         --bottom)       POSITION="bottom"; shift ;;
         --size)         SIZE="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: claudebreak [OPTIONS]"
+            echo "Usage: claudebreak [OPTIONS] [-- CLAUDE_ARGS...]"
             echo ""
             echo "Options:"
             echo "  --no-autofocus  Don't auto-switch focus to game pane"
             echo "  --left          Game pane on the left (default: right)"
             echo "  --bottom        Game pane on the bottom"
             echo "  --size PERCENT  Game pane size in % (default: 30)"
+            echo ""
+            echo "Everything after -- is passed to claude:"
+            echo "  claudebreak -- --dangerously-skip-permissions"
+            echo "  claudebreak -- -p 'fix the tests'"
+            echo "  claudebreak --left -- --model sonnet"
             exit 0 ;;
+        --)  shift; CLAUDE_ARGS="$*"; break ;;
         *) shift ;;
     esac
 done
@@ -99,7 +106,7 @@ if [ "$AUTOFOCUS" = "false" ]; then
     touch /tmp/claude-breakout-no-autofocus
 fi
 
-tmux new-session -d -s claudebreak "claude"
+tmux new-session -d -s claudebreak "claude $CLAUDE_ARGS"
 CLAUDE_PANE=$(tmux display-message -t claudebreak -p '#{pane_id}')
 echo "$CLAUDE_PANE" > /tmp/claude-breakout-claude-pane
 
