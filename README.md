@@ -42,6 +42,21 @@ That's it. The script handles:
 5. Creating the `claudebreak` launcher
 6. Adding `~/.local/bin` to your PATH
 
+## Update
+
+If you built from source and want the latest version:
+
+```bash
+cd claude-breakout
+git pull
+cargo build --release
+cp target/release/claude-breakout ~/.local/bin/claude-breakout
+```
+
+> **Note:** quit the game first (`Q`) — you can't overwrite a running binary.
+
+Or just re-run the one-liner install, it will rebuild from the latest master.
+
 ## Usage
 
 ### With tmux (recommended)
@@ -143,6 +158,8 @@ Options:
 ## Leaderboard
 
 Scores are automatically submitted at Game Over to a global leaderboard powered by **Cloudflare Workers + KV**.
+
+The default leaderboard is live at `claude-breakout-leaderboard.clement-serizay.workers.dev`.
 
 View the leaderboard from the terminal:
 
