@@ -84,36 +84,54 @@ pub fn render(frame: &mut Frame, game: &GameState) {
 }
 
 fn render_game_over(frame: &mut Frame, area: Rect, game: &GameState) {
-    let score = format!("Score: {}", game.score);
-    let level_combo = if game.combo_max > 0 {
-        format!("Level: {} | Best combo: x{}", game.level, game.combo_max)
+    let mut lines: Vec<String> = Vec::new();
+
+    // Score line
+    lines.push(String::new());
+    lines.push(format!("Score: {}", game.score));
+    if game.combo_max > 0 {
+        lines.push(format!("Level: {} | Best combo: x{}", game.level, game.combo_max));
     } else {
-        format!("Level: {}", game.level)
-    };
-
-    let rank_line = match game.leaderboard_rank {
-        Some((rank, total)) => format!("#{} / {} players", rank, total),
-        None => String::new(),
-    };
-
-    let clipboard_line = if game.clipboard_msg_ticks > 0 {
-        "Copied to clipboard!"
-    } else {
-        ""
-    };
-
-    let mut lines: Vec<&str> = vec!["", &score, &level_combo];
-    if !rank_line.is_empty() {
-        lines.push(&rank_line);
+        lines.push(format!("Level: {}", game.level));
     }
-    lines.push("");
-    if !clipboard_line.is_empty() {
-        lines.push(clipboard_line);
-        lines.push("");
-    }
-    lines.extend_from_slice(&["ENTER retry | S share | Q quit"]);
 
-    render_popup(frame, area, "GAME OVER", &lines);
+    // Rank
+    if let Some((rank, total)) = game.leaderboard_rank {
+        lines.push(format!("#{} / {} players", rank, total));
+    }
+
+    // Player best
+    if let Some(best) = game.player_best {
+        if best > game.score {
+            lines.push(format!("Your best: {}", best));
+        } else if best == game.score {
+            lines.push("New personal best!".to_string());
+        }
+    }
+
+    lines.push(String::new());
+
+    // Leaderboard top 10
+    if !game.leaderboard_top.is_empty() {
+        let header = if game.daily_mode { "--- DAILY TOP 10 ---" } else { "--- TOP 10 ---" };
+        lines.push(header.to_string());
+        for (i, (name, score)) in game.leaderboard_top.iter().enumerate() {
+            let marker = if *score == game.score { ">" } else { " " };
+            lines.push(format!("{}{:>2}. {:<12} {:>6}", marker, i + 1, name, score));
+        }
+        lines.push(String::new());
+    }
+
+    // Clipboard feedback
+    if game.clipboard_msg_ticks > 0 {
+        lines.push("Copied to clipboard!".to_string());
+        lines.push(String::new());
+    }
+
+    lines.push("ENTER retry | S share | Q quit".to_string());
+
+    let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+    render_popup(frame, area, "GAME OVER", &line_refs);
 }
 
 struct GameView<'a> {

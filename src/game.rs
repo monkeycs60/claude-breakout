@@ -80,6 +80,8 @@ pub struct GameState {
     pub combo_max: u32,
     pub daily_mode: bool,
     pub leaderboard_rank: Option<(u32, u32)>,
+    pub leaderboard_top: Vec<(String, u32)>,
+    pub player_best: Option<u32>,
     pub clipboard_msg_ticks: u32,
     rng: StdRng,
 }
@@ -116,6 +118,8 @@ impl GameState {
             combo_max: 0,
             daily_mode,
             leaderboard_rank: None,
+            leaderboard_top: Vec::new(),
+            player_best: None,
             clipboard_msg_ticks: 0,
             rng,
         };
@@ -316,6 +320,8 @@ impl GameState {
                 self.combo = 0;
                 self.combo_max = 0;
                 self.leaderboard_rank = None;
+                self.leaderboard_top.clear();
+                self.player_best = None;
                 self.clipboard_msg_ticks = 0;
                 self.lives = INITIAL_LIVES;
                 self.level = 1;

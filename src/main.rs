@@ -157,6 +157,7 @@ fn run_loop(
 ) -> io::Result<()> {
     let mut last_tick = Instant::now();
     let mut score_rx: Option<mpsc::Receiver<(u32, u32)>> = None;
+    let mut lb_rx: Option<mpsc::Receiver<(Vec<(String, u32)>, Option<u32>)>> = None;
     let mut was_game_over = false;
     let player_name = leaderboard::get_player_name();
 
@@ -175,27 +176,58 @@ fn run_loop(
                 game.leaderboard_rank = Some((rank, total));
             }
         }
+        // Check for async leaderboard fetch result
+        if let Some(ref rx) = lb_rx {
+            if let Ok((top, best)) = rx.try_recv() {
+                game.leaderboard_top = top;
+                game.player_best = best;
+            }
+        }
 
-        // Submit score when game just ended
+        // Submit score + fetch leaderboard when game just ended
         if game.status == GameStatus::GameOver && !was_game_over {
             was_game_over = true;
+            let mode_str = if game.daily_mode { "daily" } else { "freeplay" };
             let entry = leaderboard::ScoreEntry {
                 player: player_name.clone(),
                 score: game.score,
                 level: game.level,
                 combo_max: game.combo_max,
-                mode: if game.daily_mode {
-                    "daily".to_string()
-                } else {
-                    "freeplay".to_string()
-                },
+                mode: mode_str.to_string(),
                 date: GameState::today_date_string(),
             };
+            // Submit score
             let (tx, rx) = mpsc::channel();
             score_rx = Some(rx);
             std::thread::spawn(move || {
                 if let Ok(resp) = leaderboard::submit_score(&entry) {
                     let _ = tx.send((resp.rank, resp.total));
+                }
+            });
+            // Fetch leaderboard top 10 + player best
+            let (lb_tx, lb_r) = mpsc::channel();
+            lb_rx = Some(lb_r);
+            let mode_for_fetch = mode_str.to_string();
+            let date_for_fetch = GameState::today_date_string();
+            let name_for_fetch = player_name.clone();
+            std::thread::spawn(move || {
+                let date_opt = if mode_for_fetch == "daily" {
+                    Some(date_for_fetch.as_str())
+                } else {
+                    None
+                };
+                if let Ok(scores) = leaderboard::fetch_leaderboard(&mode_for_fetch, date_opt) {
+                    let top: Vec<(String, u32)> = scores
+                        .iter()
+                        .take(10)
+                        .map(|s| (s.player.clone(), s.score))
+                        .collect();
+                    let best = scores
+                        .iter()
+                        .filter(|s| s.player == name_for_fetch)
+                        .map(|s| s.score)
+                        .max();
+                    let _ = lb_tx.send((top, best));
                 }
             });
         }
