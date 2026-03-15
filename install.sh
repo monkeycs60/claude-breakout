@@ -163,9 +163,9 @@ if os.path.exists(settings_file):
 
 hooks = settings.setdefault("hooks", {})
 
-# Signal + tmux autofocus commands
-usr1_cmd = 'kill -USR1 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-game-pane 2>/dev/null) 2>/dev/null; true'
-usr2_cmd = 'kill -USR2 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-claude-pane 2>/dev/null) 2>/dev/null; true'
+# Signal + tmux autofocus commands (only fire if in the claudebreak tmux session)
+usr1_cmd = '[ "$(tmux display-message -p "#{session_name}" 2>/dev/null)" = "claudebreak" ] && { kill -USR1 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-game-pane 2>/dev/null) 2>/dev/null; }; true'
+usr2_cmd = '[ "$(tmux display-message -p "#{session_name}" 2>/dev/null)" = "claudebreak" ] && { kill -USR2 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-claude-pane 2>/dev/null) 2>/dev/null; }; true'
 
 # Hook entries to add
 new_hooks = {
