@@ -42,11 +42,18 @@ pub fn render(frame: &mut Frame, game: &GameState) {
     // Draw overlays on top
     match game.status {
         GameStatus::Waiting => {
+            let mode_line = if game.daily_mode {
+                format!("Daily Challenge {}", GameState::today_date_string())
+            } else {
+                "Free Play".to_string()
+            };
             render_popup(
                 frame,
                 area,
                 "CLAUDE-BREAKOUT",
                 &[
+                    "",
+                    &mode_line,
                     "",
                     "Waiting for Claude...",
                     "",
@@ -70,17 +77,43 @@ pub fn render(frame: &mut Frame, game: &GameState) {
             );
         }
         GameStatus::GameOver => {
-            let score = format!("Score: {}", game.score);
-            let level = format!("Level: {}", game.level);
-            render_popup(
-                frame,
-                area,
-                "GAME OVER",
-                &["", &score, &level, "", "ENTER to play again", "Q to quit"],
-            );
+            render_game_over(frame, area, game);
         }
         GameStatus::Playing => {}
     }
+}
+
+fn render_game_over(frame: &mut Frame, area: Rect, game: &GameState) {
+    let score = format!("Score: {}", game.score);
+    let level_combo = if game.combo_max > 0 {
+        format!("Level: {} | Best combo: x{}", game.level, game.combo_max)
+    } else {
+        format!("Level: {}", game.level)
+    };
+
+    let rank_line = match game.leaderboard_rank {
+        Some((rank, total)) => format!("#{} / {} players", rank, total),
+        None => String::new(),
+    };
+
+    let clipboard_line = if game.clipboard_msg_ticks > 0 {
+        "Copied to clipboard!"
+    } else {
+        ""
+    };
+
+    let mut lines: Vec<&str> = vec!["", &score, &level_combo];
+    if !rank_line.is_empty() {
+        lines.push(&rank_line);
+    }
+    lines.push("");
+    if !clipboard_line.is_empty() {
+        lines.push(clipboard_line);
+        lines.push("");
+    }
+    lines.extend_from_slice(&["ENTER retry | S share | Q quit"]);
+
+    render_popup(frame, area, "GAME OVER", &lines);
 }
 
 struct GameView<'a> {
@@ -89,7 +122,15 @@ struct GameView<'a> {
 
 impl<'a> Widget for GameView<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = format!(" claude-breakout | Lvl {} ", self.game.level);
+        let title = if self.game.daily_mode {
+            format!(
+                " claude-breakout | Lvl {} | Daily {} ",
+                self.game.level,
+                GameState::today_date_string()
+            )
+        } else {
+            format!(" claude-breakout | Lvl {} ", self.game.level)
+        };
         let block = Block::default()
             .borders(Borders::ALL)
             .title(title)
@@ -105,6 +146,7 @@ impl<'a> Widget for GameView<'a> {
             render_balls(buf, game, inner);
             render_paddle(buf, game, inner);
             render_falling_powerups(buf, game, inner);
+            render_combo(buf, game, inner);
         }
 
         render_status_bar(buf, game, area);
@@ -126,9 +168,9 @@ fn render_bricks(buf: &mut Buffer, game: &GameState, area: Rect) {
                 let x_start = offset_x + col_idx as f64 * (BRICK_WIDTH + BRICK_GAP) as f64;
                 let color = BRICK_COLORS[b.color_idx % BRICK_COLORS.len()];
                 let ch = match b.hits {
-                    3 => "▓",
-                    2 => "▒",
-                    _ => "█",
+                    3 => "\u{2593}",
+                    2 => "\u{2592}",
+                    _ => "\u{2588}",
                 };
                 let brick_str: String = ch.repeat(BRICK_WIDTH);
 
@@ -150,7 +192,7 @@ fn render_balls(buf: &mut Buffer, game: &GameState, area: Rect) {
         let x = area.x + ball.x.round() as u16;
         let y = area.y + ball.y.round() as u16;
         if x >= area.x && x < area.x + area.width && y >= area.y && y < area.y + area.height {
-            buf.set_string(x, y, "●", style);
+            buf.set_string(x, y, "\u{25cf}", style);
         }
     }
 }
@@ -161,7 +203,7 @@ fn render_paddle(buf: &mut Buffer, game: &GameState, area: Rect) {
     let paddle_width = game.paddle.width.round() as u16;
 
     if paddle_y < area.y + area.height {
-        let paddle_str = "━".repeat(paddle_width as usize);
+        let paddle_str = "\u{2501}".repeat(paddle_width as usize);
         let style = Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD);
@@ -176,9 +218,9 @@ fn render_falling_powerups(buf: &mut Buffer, game: &GameState, area: Rect) {
         let y = area.y + p.y.round() as u16;
         if x >= area.x && x < area.x + area.width && y >= area.y && y < area.y + area.height {
             let (ch, color) = match p.kind {
-                PowerupKind::WidePaddle => ("◆W", Color::Magenta),
-                PowerupKind::MultiBall => ("◆M", Color::Cyan),
-                PowerupKind::SlowMo => ("◆S", Color::Yellow),
+                PowerupKind::WidePaddle => ("\u{25c6}W", Color::Magenta),
+                PowerupKind::MultiBall => ("\u{25c6}M", Color::Cyan),
+                PowerupKind::SlowMo => ("\u{25c6}S", Color::Yellow),
             };
             buf.set_string(
                 x,
@@ -190,13 +232,45 @@ fn render_falling_powerups(buf: &mut Buffer, game: &GameState, area: Rect) {
     }
 }
 
+fn render_combo(buf: &mut Buffer, game: &GameState, area: Rect) {
+    let multiplier = game.combo_multiplier();
+    if multiplier < 2 {
+        return;
+    }
+
+    let text = format!("x{}", multiplier);
+    let color = match multiplier {
+        2 => Color::Green,
+        3 => Color::Yellow,
+        4 => Color::LightRed,
+        _ => Color::Magenta,
+    };
+
+    // Show combo near the top-right of the play area
+    let x = area.x + area.width.saturating_sub(text.len() as u16 + 1);
+    let y = area.y + 1;
+    if x >= area.x && y < area.y + area.height {
+        buf.set_string(
+            x,
+            y,
+            &text,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        );
+    }
+}
+
 fn render_status_bar(buf: &mut Buffer, game: &GameState, area: Rect) {
     let y = area.y + area.height - 1;
-    let hearts: String = (0..game.lives).map(|_| '♥').collect();
+    let hearts: String = (0..game.lives).map(|_| '\u{2665}').collect();
     let empty: String = (0..(INITIAL_LIVES.saturating_sub(game.lives)))
-        .map(|_| '♡')
+        .map(|_| '\u{2661}')
         .collect();
-    let status = format!(" Score: {:>5}  {}{}  ", game.score, hearts, empty);
+    let combo_text = if game.combo_multiplier() >= 2 {
+        format!(" x{}", game.combo_multiplier())
+    } else {
+        String::new()
+    };
+    let status = format!(" Score: {:>5}{}  {}{}  ", game.score, combo_text, hearts, empty);
     buf.set_string(
         area.x + 1,
         y,
@@ -226,7 +300,7 @@ fn render_effects_bar(buf: &mut Buffer, game: &GameState, area: Rect) {
     }
 
     let text = parts.join(" ");
-    let x = area.x + area.width - 1 - text.len() as u16;
+    let x = area.x + area.width.saturating_sub(1 + text.len() as u16);
     buf.set_string(x, y, &text, Style::default().fg(Color::Yellow));
 }
 

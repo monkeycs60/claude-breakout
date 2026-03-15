@@ -1,0 +1,15 @@
+name = "claude-breakout-leaderboard"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Create the KV namespace with:
+#   wrangler kv:namespace create SCORES
+# Then replace the id below with the output.
+#
+# For a preview namespace (used by `wrangler dev`):
+#   wrangler kv:namespace create SCORES --preview
+# Then replace the preview_id below.
+[[kv_namespaces]]
+binding = "SCORES"
+id = "PLACEHOLDER_KV_NAMESPACE_ID"
+preview_id = "PLACEHOLDER_KV_PREVIEW_NAMESPACE_ID"

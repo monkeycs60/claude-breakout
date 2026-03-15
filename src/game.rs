@@ -1,4 +1,5 @@
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 const BRICK_WIDTH: usize = 6;
 const BRICK_GAP: usize = 1;
@@ -75,12 +76,23 @@ pub struct GameState {
     pub grace_ticks: u32,
     pub total_bricks: usize,
     pub bricks_destroyed: usize,
+    pub combo: u32,
+    pub combo_max: u32,
+    pub daily_mode: bool,
+    pub leaderboard_rank: Option<(u32, u32)>,
+    pub clipboard_msg_ticks: u32,
+    rng: StdRng,
 }
 
 impl GameState {
-    pub fn new(term_width: u16, term_height: u16) -> Self {
+    pub fn new(term_width: u16, term_height: u16, daily_mode: bool) -> Self {
         let w = (term_width - 2) as f64;
         let h = (term_height - 2) as f64;
+        let rng = if daily_mode {
+            StdRng::seed_from_u64(Self::date_seed())
+        } else {
+            StdRng::from_entropy()
+        };
         let mut game = GameState {
             status: GameStatus::Waiting,
             balls: Vec::new(),
@@ -100,10 +112,44 @@ impl GameState {
             grace_ticks: 0,
             total_bricks: 0,
             bricks_destroyed: 0,
+            combo: 0,
+            combo_max: 0,
+            daily_mode,
+            leaderboard_rank: None,
+            clipboard_msg_ticks: 0,
+            rng,
         };
         game.init_level();
         game.spawn_ball();
         game
+    }
+
+    pub fn combo_multiplier(&self) -> u32 {
+        (1 + self.combo / 5).min(5)
+    }
+
+    fn date_seed() -> u64 {
+        let now = std::time::SystemTime::now();
+        let since_epoch = now.duration_since(std::time::UNIX_EPOCH).unwrap();
+        // Seed based on day number — same seed for everyone on the same day
+        since_epoch.as_secs() / 86400
+    }
+
+    pub fn today_date_string() -> String {
+        let now = std::time::SystemTime::now();
+        let since_epoch = now.duration_since(std::time::UNIX_EPOCH).unwrap();
+        let days = since_epoch.as_secs() / 86400;
+        let z = days + 719468;
+        let era = z / 146097;
+        let doe = z - era * 146097;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = if m <= 2 { y + 1 } else { y };
+        format!("{:04}-{:02}-{:02}", y, m, d)
     }
 
     pub fn resize(&mut self, term_width: u16, term_height: u16) {
@@ -267,12 +313,19 @@ impl GameState {
             }
             GameStatus::GameOver => {
                 self.score = 0;
+                self.combo = 0;
+                self.combo_max = 0;
+                self.leaderboard_rank = None;
+                self.clipboard_msg_ticks = 0;
                 self.lives = INITIAL_LIVES;
                 self.level = 1;
                 self.effects.clear();
                 self.powerups.clear();
                 self.paddle.width = PADDLE_BASE_WIDTH;
                 self.paddle.x = self.width / 2.0;
+                if self.daily_mode {
+                    self.rng = StdRng::seed_from_u64(Self::date_seed());
+                }
                 self.init_level();
                 self.balls.clear();
                 self.spawn_ball();
@@ -285,6 +338,7 @@ impl GameState {
     pub fn update(&mut self) {
         self.update_effects();
         self.grace_ticks = self.grace_ticks.saturating_sub(1);
+        self.clipboard_msg_ticks = self.clipboard_msg_ticks.saturating_sub(1);
 
         let speed_mult = if self.grace_ticks > 0 {
             GRACE_SPEED / self.current_speed().max(0.1)
@@ -359,6 +413,7 @@ impl GameState {
                     ball.vx = hit_pos * speed * 1.3;
                     ball.vy = -(speed * 0.5 + (1.0 - hit_pos.abs()) * speed * 0.2);
                     ball.y = paddle_y - 0.1;
+                    self.combo = 0;
                 }
             }
 
@@ -392,7 +447,6 @@ impl GameState {
 
     fn check_brick_collisions(&mut self) {
         let offset_x = self.brick_offset_x();
-        let mut rng = rand::thread_rng();
         let mut new_powerups = Vec::new();
 
         for ball in &mut self.balls {
@@ -425,12 +479,17 @@ impl GameState {
                             brick.hits -= 1;
                             if brick.hits == 0 {
                                 let points = brick.points;
-                                self.score += points;
+                                self.combo += 1;
+                                if self.combo > self.combo_max {
+                                    self.combo_max = self.combo;
+                                }
+                                let multiplier = (1 + self.combo / 5).min(5);
+                                self.score += points * multiplier;
                                 self.bricks_destroyed += 1;
 
                                 // Maybe spawn powerup
-                                if rng.gen::<f64>() < POWERUP_CHANCE {
-                                    let kind = match rng.gen_range(0..3) {
+                                if self.rng.gen::<f64>() < POWERUP_CHANCE {
+                                    let kind = match self.rng.gen_range(0..3) {
                                         0 => PowerupKind::WidePaddle,
                                         1 => PowerupKind::MultiBall,
                                         _ => PowerupKind::SlowMo,
@@ -461,6 +520,7 @@ impl GameState {
         let paddle_right = self.paddle.x + self.paddle.width / 2.0;
         let height = self.height;
         let first_ball = self.balls.first().cloned();
+        let ball_count = self.balls.len();
 
         let mut new_effects = Vec::new();
         let mut new_balls = Vec::new();
@@ -480,16 +540,18 @@ impl GameState {
                         });
                     }
                     PowerupKind::MultiBall => {
-                        if let Some(ref ball) = first_ball {
-                            new_balls.push(Ball {
-                                vx: -ball.vx,
-                                ..ball.clone()
-                            });
-                            new_balls.push(Ball {
-                                vx: ball.vx * 0.3,
-                                vy: -(ball.vx.hypot(ball.vy) * 0.6).min(-0.15),
-                                ..ball.clone()
-                            });
+                        if ball_count + new_balls.len() < 12 {
+                            if let Some(ref ball) = first_ball {
+                                new_balls.push(Ball {
+                                    vx: -ball.vx,
+                                    ..ball.clone()
+                                });
+                                new_balls.push(Ball {
+                                    vx: ball.vx * 0.3,
+                                    vy: -(ball.vx.hypot(ball.vy) * 0.6).min(-0.15),
+                                    ..ball.clone()
+                                });
+                            }
                         }
                     }
                     PowerupKind::SlowMo => {
