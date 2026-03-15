@@ -1,4 +1,4 @@
-# claude-breakout
+# claude-breakout 🧱
 
 A terminal Breakout game that you play **while waiting for Claude Code** to finish processing.
 
@@ -9,20 +9,20 @@ The game auto-pauses when Claude responds and auto-resumes when you submit a new
 ## How it works
 
 ```
-+----------------------------------+-------------------+
-|                                  |  ██████ ██████    |
-|     Claude Code                  |  ██████ ██████    |
-|                                  |  ██████ ██████    |
-|  ... Thinking...                 |      .            |
-|                                  |    =========      |
-|                                  | Score: 420 x3 ### |
-+----------------------------------+-------------------+
+┌─────────────────────────────────┬──────────────────┐
+│                                 │   ██████ ██████  │
+│     Claude Code                 │   ██████ ██████  │
+│                                 │   ██████ ██████  │
+│  ⏳ Thinking...                 │       ●      x3  │
+│                                 │     ━━━━━━━      │
+│                                 │  Score: 420  ♥♥♥ │
+└─────────────────────────────────┴──────────────────┘
 ```
 
 Uses Claude Code's [hook system](https://docs.anthropic.com/en/docs/claude-code/hooks) to detect when Claude starts/stops processing:
 
-- **`UserPromptSubmit`** hook -> sends `SIGUSR1` -> game **unpauses**
-- **`Stop`** hook -> sends `SIGUSR2` -> game **pauses**
+- **`UserPromptSubmit`** hook → sends `SIGUSR1` → game **unpauses**
+- **`Stop`** hook → sends `SIGUSR2` → game **pauses**
 
 Zero interference with your workflow.
 
@@ -64,7 +64,7 @@ Just open two terminals:
 1. Run `claude` (Claude Code) in one
 2. Run `claude-breakout` in the other
 
-The hooks still work -- the game will auto-pause/resume via Unix signals regardless of your terminal setup. You just won't get auto-focus switching.
+The hooks still work — the game will auto-pause/resume via Unix signals regardless of your terminal setup. You just won't get auto-focus switching.
 
 ### Standalone (no Claude Code)
 
@@ -78,7 +78,7 @@ Press `Enter` to start, `Space` to pause. Works without any hooks.
 
 | Key | Action |
 |-----|--------|
-| `<- ->` | Move paddle |
+| `← →` | Move paddle |
 | `Space` | Pause / Resume |
 | `Enter` | Start / Restart |
 | `S` | Share score (at Game Over) |
@@ -90,75 +90,124 @@ Press `Enter` to start, `Space` to pause. Works without any hooks.
 
 Classic breakout with random powerup drops. Play as many levels as you can.
 
+```bash
+claude-breakout
+```
+
 ### Daily Challenge
+
+Everyone gets the **same game** each day — same brick patterns, same powerup drops, same seed. Compete on the daily leaderboard. Like Wordle, but with bricks.
 
 ```bash
 claude-breakout --daily
 ```
 
-Everyone gets the **same game** each day (same powerup drops, same seed). Compete on the daily leaderboard. Like Wordle, but with bricks.
-
 ## Features
 
 - **Auto pause/resume** via Claude Code hooks
-- **Auto-focus** -- tmux switches between game and Claude panes automatically
-- **Progressive difficulty** -- ball starts slow, accelerates as you destroy bricks
-- **Combo system** -- consecutive brick hits without touching the paddle build a multiplier (x2, x3... up to x5)
-- **Daily challenge** -- seeded RNG, same game for everyone, daily leaderboard
-- **Global leaderboard** -- scores submitted to the cloud, compete with others
-- **Share score** -- press S at Game Over to copy a shareable snippet to clipboard
+- **Auto-focus** — tmux switches between game and Claude panes automatically
+- **Progressive difficulty** — ball starts slow, accelerates as you destroy bricks
+- **6 level patterns** — full grid, pyramid, checkerboard, diamond, stripes, inverted pyramid (cycling)
+- **Multi-hit bricks** — from level 4+, top rows require 2-3 hits (▒ = 2 hits, ▓ = 3 hits)
+- **Combo system** — consecutive brick hits without touching the paddle build a multiplier (x2 at 5 hits, x3 at 10, up to x5)
+- **Daily challenge** — seeded RNG, same game for everyone, daily leaderboard
+- **Global leaderboard** — scores auto-submitted to Cloudflare Workers backend
+- **Share score** — press `S` at Game Over to copy a shareable snippet to clipboard
 - **Powerups** (rare ~5% drop rate):
-  - `W` Wide paddle (10s)
-  - `M` Multi-ball (3 balls!)
-  - `S` Slow-mo (8s)
-- **Grace period** -- ball slows down for 1s after resuming so you don't get blindsided
-- **Responsive** -- adapts to terminal/pane size
-- **Lightweight** -- single binary, ~30 FPS, minimal CPU
+  - `◆W` Wide paddle (10s) — paddle grows 1.5x
+  - `◆M` Multi-ball — spawns 2 extra balls (max 12)
+  - `◆S` Slow-mo (8s) — ball speed halved
+- **Grace period** — ball slows down for 1s after resuming so you don't get blindsided
+- **Responsive** — adapts to terminal/pane size, auto-rescales on resize
+- **Lightweight** — single ~2.7MB binary, ~30 FPS, minimal CPU
 
 ## CLI Options
 
-```bash
-claude-breakout --daily           # Daily challenge mode
-claude-breakout --scores          # Show leaderboard and exit
-claude-breakout --name alice      # Set player name (saved to ~/.claude-breakout/config.json)
-claude-breakout --api-url URL     # Override leaderboard API URL
-claude-breakout --version         # Show version
-claude-breakout --help            # Show help
+```
+Usage: claude-breakout [OPTIONS]
+
+Options:
+  -d, --daily       Daily challenge (same seed for everyone today)
+  -s, --scores      Show leaderboard and exit
+  -n, --name NAME   Set player name (saved to ~/.claude-breakout/config.json)
+  --api-url URL     Override leaderboard API URL
+  -V, --version     Show version
+  -h, --help        Show this help
 ```
 
-## Leaderboard API
+## Leaderboard
 
-The leaderboard backend runs on Cloudflare Workers. To self-host:
+Scores are automatically submitted at Game Over to a global leaderboard powered by **Cloudflare Workers + KV**.
+
+View the leaderboard from the terminal:
+
+```bash
+claude-breakout --scores
+```
+
+### Self-hosting the leaderboard API
+
+The backend lives in `backend/`. To deploy your own:
 
 ```bash
 cd backend
 npm install
-# Create KV namespace:
+
+# Create the KV namespace
 npx wrangler kv:namespace create SCORES
-# Update wrangler.toml with the returned namespace ID
+# Copy the returned ID into wrangler.toml
+
+# Deploy
 npx wrangler deploy
 ```
 
-Then point your game to it:
+Then point the game to your instance:
 
 ```bash
+# Per-session
 claude-breakout --api-url https://your-worker.your-subdomain.workers.dev
-# Or set it globally:
+
+# Or permanently via env var (add to ~/.bashrc)
 export BREAKOUT_API_URL=https://your-worker.your-subdomain.workers.dev
+```
+
+### API endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/scores` | Submit a score |
+| `GET` | `/api/leaderboard/daily?date=YYYY-MM-DD` | Daily leaderboard |
+| `GET` | `/api/leaderboard/freeplay` | All-time leaderboard |
+
+## Configuration
+
+Player config is stored in `~/.claude-breakout/config.json`:
+
+```json
+{
+  "player": "your_name"
+}
+```
+
+Set your player name:
+
+```bash
+claude-breakout --name your_name
 ```
 
 ## Requirements
 
 - [Rust](https://rustup.rs) (to build)
-- [tmux](https://github.com/tmux/tmux) (optional -- for side-by-side mode + auto-focus)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (optional -- for auto pause/resume)
+- [tmux](https://github.com/tmux/tmux) (optional — for side-by-side mode + auto-focus)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (optional — for auto pause/resume)
 
 ## Uninstall
 
 ```bash
 rm ~/.local/bin/claude-breakout ~/.local/bin/claudebreak
+rm -rf ~/.claude-breakout
 # Remove hooks from ~/.claude/settings.json
-# (delete the "UserPromptSubmit" and "Stop" entries containing "claude-breakout")
+# (delete the "UserPromptSubmit", "Stop", "PermissionRequest" and "Notification" entries containing "claude-breakout")
 ```
 
 ## License
