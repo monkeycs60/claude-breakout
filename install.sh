@@ -157,8 +157,8 @@ if os.path.exists(settings_file):
 hooks = settings.setdefault("hooks", {})
 
 # Signal + tmux autofocus commands
-usr1_cmd = 'kill -USR1 $(cat /tmp/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-game-pane 2>/dev/null) 2>/dev/null; true'
-usr2_cmd = 'kill -USR2 $(cat /tmp/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-claude-pane 2>/dev/null) 2>/dev/null; true'
+usr1_cmd = 'kill -USR1 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-game-pane 2>/dev/null) 2>/dev/null; true'
+usr2_cmd = 'kill -USR2 $(cat ${XDG_RUNTIME_DIR:-/tmp}/claude-breakout.pid 2>/dev/null) 2>/dev/null; [ ! -f /tmp/claude-breakout-no-autofocus ] && tmux select-pane -t $(cat /tmp/claude-breakout-claude-pane 2>/dev/null) 2>/dev/null; true'
 
 # Hook entries to add
 new_hooks = {
@@ -214,13 +214,16 @@ echo -e "${GREEN} Installation complete!${NC}"
 echo -e "${GREEN}══════════════════════════════════════${NC}"
 echo ""
 echo "Usage:"
-echo "  claudebreak          Launch Claude Code + Breakout side by side"
-echo "  claude-breakout      Launch just the game standalone"
+echo "  claudebreak                Launch Claude Code + Breakout side by side"
+echo "  claude-breakout            Launch just the game standalone"
+echo "  claude-breakout --daily    Daily challenge (same game for everyone)"
+echo "  claude-breakout --scores   Show leaderboard"
 echo ""
 echo "Controls:"
 echo "  ← →     Move paddle"
 echo "  SPACE    Pause/Resume"
 echo "  ENTER    Start game / Restart after game over"
+echo "  S        Share score (at Game Over)"
 echo "  Q        Quit"
 echo ""
 echo "The game auto-pauses when Claude finishes and"
