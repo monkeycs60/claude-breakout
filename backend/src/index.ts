@@ -23,7 +23,7 @@ interface SubmitRequest {
 }
 
 const MAX_SCORES_PER_KEY = 100;
-const RATE_LIMIT_SECONDS = 10;
+const RATE_LIMIT_SECONDS = 60;
 
 const PLAYER_RE = /^[a-zA-Z0-9_]{1,20}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

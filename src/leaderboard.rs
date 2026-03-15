@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::PathBuf;
 
-const DEFAULT_API_URL: &str = "https://breakout-api.workers.dev";
+const DEFAULT_API_URL: &str = "https://claude-breakout-leaderboard.clement-serizay.workers.dev";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ScoreEntry {
