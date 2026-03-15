@@ -10,6 +10,7 @@ interface ScoreEntry {
   score: number;
   level: number;
   combo_max: number;
+  mode: string;
   date: string;
 }
 
@@ -91,6 +92,7 @@ app.post("/api/scores", async (c) => {
     score,
     level,
     combo_max,
+    mode,
     date: effectiveDate,
   };
 
