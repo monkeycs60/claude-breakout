@@ -149,66 +149,17 @@ Usage: claude-breakout [OPTIONS]
 Options:
   -d, --daily       Daily challenge (same seed for everyone today)
   -s, --scores      Show leaderboard and exit
-  -n, --name NAME   Set player name (saved to ~/.claude-breakout/config.json)
-  --api-url URL     Override leaderboard API URL
+  -n, --name NAME   Set player name
   -V, --version     Show version
   -h, --help        Show this help
 ```
 
 ## Leaderboard
 
-Scores are automatically submitted at Game Over to a global leaderboard powered by **Cloudflare Workers + KV**.
-
-The default leaderboard is live at `claude-breakout-leaderboard.clement-serizay.workers.dev`.
-
-View the leaderboard from the terminal:
+Scores are automatically submitted at Game Over to a global leaderboard. View it from the terminal:
 
 ```bash
 claude-breakout --scores
-```
-
-### Self-hosting the leaderboard API
-
-The backend lives in `backend/`. To deploy your own:
-
-```bash
-cd backend
-npm install
-
-# Create the KV namespace
-npx wrangler kv:namespace create SCORES
-# Copy the returned ID into wrangler.toml
-
-# Deploy
-npx wrangler deploy
-```
-
-Then point the game to your instance:
-
-```bash
-# Per-session
-claude-breakout --api-url https://your-worker.your-subdomain.workers.dev
-
-# Or permanently via env var (add to ~/.bashrc)
-export BREAKOUT_API_URL=https://your-worker.your-subdomain.workers.dev
-```
-
-### API endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/scores` | Submit a score |
-| `GET` | `/api/leaderboard/daily?date=YYYY-MM-DD` | Daily leaderboard |
-| `GET` | `/api/leaderboard/freeplay` | All-time leaderboard |
-
-## Configuration
-
-Player config is stored in `~/.claude-breakout/config.json`:
-
-```json
-{
-  "player": "your_name"
-}
 ```
 
 Set your player name:
